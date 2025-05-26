@@ -3,33 +3,40 @@ import wandb
 import torch
 from ultralytics import RTDETR
 
-# ✅ 自动登录 WandB，无需手动输入
+# ✅ 自动登录 WandB（替代手动 login）
 os.environ['WANDB_API_KEY'] = 'f8cb8b13b090d70eb2b9b5ee36da161979b90a95'
 
+# 关闭警告
 warnings.filterwarnings('ignore')
 
+# ✅ 初始化 WandB 项目
 wandb.init(
     project='rtdetr-project',
     name=time.strftime("rtdetr-%Y%m%d-%H%M%S"),
 )
 
-# ✅ 2. 每个 epoch 结束时手动记录 loss
+# ✅ 每个 epoch 结束时记录 loss（兼容 RT-DETR）
 def on_fit_epoch_end(trainer):
-    # 通常 loss_items: [cls_loss, box_loss, obj_loss, total_loss]
-    if hasattr(trainer, 'loss_items') and trainer.loss_items is not None:
-        wandb.log({
-            'epoch': trainer.epoch,
-            'loss_cls': trainer.loss_items[0],
-            'loss_box': trainer.loss_items[1],
-            'loss_obj': trainer.loss_items[2],
-            'loss_total': sum(trainer.loss_items),
-        })
-    else:
-        print("⚠️ trainer.loss_items 不存在或为空")
+    # 建议打印一次查看结构（调试用）
+    # print("DEBUG: trainer.__dict__ =", trainer.__dict__)
+    try:
+        loss_dict = trainer.loss
+        if isinstance(loss_dict, dict):
+            wandb.log({
+                'epoch': trainer.epoch,
+                'loss_cls': loss_dict.get('loss_cls', 0),
+                'loss_box': loss_dict.get('loss_bbox', 0),
+                'loss_obj': loss_dict.get('loss_obj', 0),
+                'loss_total': sum(loss_dict.values())
+            })
+        else:
+            wandb.log({'epoch': trainer.epoch, 'loss': loss_dict})
+    except Exception as e:
+        print(f"⚠️ WandB 日志记录失败: {e}")
 
-# ✅ 3. 训练完成后记录模型静态信息（可选）
+# ✅ 训练结束后记录模型信息
 def log_static_model_info(model):
-    params = sum(p.numel() for p in model.model.parameters()) / 1e6
+    params = sum(p.numel() for p in model.model.parameters()) / 1e6  # 参数量 M
     model_path = 'runs/train/exp/weights/best.pt'
     size_mb = os.path.getsize(model_path) / 1e6 if os.path.exists(model_path) else 0
     dummy = torch.zeros((1, 3, 640, 640)).to(model.device)
@@ -44,7 +51,7 @@ def log_static_model_info(model):
         'fps': round(fps, 2),
     })
 
-# ✅ 4. 主训练入口
+# ✅ 主程序入口
 if __name__ == '__main__':
     model = RTDETR('ultralytics/cfg/models/rt-detr/rtdetr-r18.yaml')
 
@@ -57,8 +64,11 @@ if __name__ == '__main__':
         project='runs/train',
         name=wandb.run.name,
         visualize=True,
-        callbacks={'on_fit_epoch_end': on_fit_epoch_end},  # 记录 loss
+        callbacks={'on_fit_epoch_end': on_fit_epoch_end},  # 注册 WandB 回调
     )
 
+    # ✅ 训练后记录模型信息（如存在 best.pt）
     if os.path.exists('runs/train/exp/weights/best.pt'):
         log_static_model_info(model)
+    else:
+        print("⚠️ 未找到 best.pt，跳过模型信息记录")
