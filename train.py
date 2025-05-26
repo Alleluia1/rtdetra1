@@ -27,6 +27,6 @@ if __name__ == '__main__':
                 workers=4, # Windows下出现莫名其妙卡主的情况可以尝试把workers设置为0
                 # device='0,1', # 指定显卡和多卡训练参考<使用教程.md>下方常见错误和解决方案
                 # resume='', # last.pt path
-                project='runs/train',
+                project='rtdetr_train',
                 name='exp',
                 )
