@@ -1,37 +1,32 @@
 import warnings, os
 # os.environ["CUDA_VISIBLE_DEVICES"]="-1"    # 代表用cpu训练 不推荐！没意义！ 而且有些模块不能在cpu上跑
 # os.environ["CUDA_VISIBLE_DEVICES"]="0"     # 代表用第一张卡进行训练  0：第一张卡 1：第二张卡
-# 多卡训练参考<YOLOV11配置文件.md>下方常见错误和解决方案
+# 多卡训练参考<使用教程.md>下方常见错误和解决方案
 warnings.filterwarnings('ignore')
-from ultralytics import YOLO
+from ultralytics import RTDETR
 
-# BILIBILI UP 魔傀面具
-# 训练参数官方详解链接：https://docs.ultralytics.com/modes/train/#resuming-interrupted-trainings:~:text=a%20training%20run.-,Train%20Settings,-The%20training%20settings
+# 深度学习炼丹必备必看必须知道的小技巧！https://www.bilibili.com/video/BV1q3SZYsExc/
+# 整合多个创新点的B站视频链接:
+# 1. [YOLOV8-不会把多个改进整合到一个yaml配置文件里面？那来看看这个吧！从简到难手把手带你整合三个yaml](https://www.bilibili.com/video/BV15H4y1Y7a2/)
+# 2. [细谈目标检测中的小目标检测头和大目标检测检测头，并教懂你怎么加微小目标、极大目标检测头！](https://www.bilibili.com/video/BV1jkDWYFEwx/)
+# 3. [不会看YOLO的模型yaml配置文件？那你还怎么整合多个配置文件！](https://www.bilibili.com/video/BV1oiBRYnEEw/)
+# 4. [不会把多个创新点整合到一个yaml配置文件里面？那来看看这个吧！手把手来你整合创新点！](https://www.bilibili.com/video/BV1DUBRYGE3b/)
+# 更多问题解答请看使用说明.md下方<常见疑问>
 
-# 训练过程中loss出现nan，可以尝试关闭AMP，就是把下方amp=False的注释去掉。
-# 训练时候输出的AMP Check使用的YOLO11n的权重不是代表载入了预训练权重的意思，只是用于测试AMP，正常的不需要理会。
-
-# 使用项目前必看<项目视频百度云链接.txt>的第一行有一个必看的视频!!
-# 使用项目前必看<项目视频百度云链接.txt>的第一行有一个必看的视频!!
-# 使用项目前必看<项目视频百度云链接.txt>的第一行有一个必看的视频!!
-# 使用项目前必看<项目视频百度云链接.txt>的第一行有一个必看的视频!!
+# 现版本中保存模型会比之前的大一倍，原因是因为之前保存模型的格式是fp16，但是fp16可能会导致部分模型在训练中精度正常
+# 但是在val.py的时候精度为0，所以统一改成fp32，原则上没影响，只是存储的位数变多了。
 
 if __name__ == '__main__':
-    model = YOLO('ultralytics/cfg/models/11/yolo11n.yaml')
-    # model.load('yolo11n.pt') # loading pretrain weights
+    model = RTDETR('ultralytics/cfg/models/rt-detr/rtdetr-r18.yaml')
+    # model.load('') # loading pretrain weights
     model.train(data='/root/autodl-tmp/neudet/data.yaml',
                 cache=False,
                 imgsz=640,
                 epochs=300,
-                batch=32,
-                close_mosaic=0, # 最后多少个epoch关闭mosaic数据增强，设置0代表全程开启mosaic训练
+                batch=4, # batchsize 不建议乱动，一般来说4的效果都是最好的，越大的batch效果会很差(经验之谈)
                 workers=4, # Windows下出现莫名其妙卡主的情况可以尝试把workers设置为0
-                # device='0,1', # 指定显卡和多卡训练参考<YOLOV11配置文件.md>下方常见错误和解决方案
-                optimizer='SGD', # using SGD
-                # patience=0, # set 0 to close earlystop.
-                # resume=True, # 断点续训,YOLO初始化时选择last.pt
-                # amp=False, # close amp | loss出现nan可以关闭amp
-                # fraction=0.2,
+                # device='0,1', # 指定显卡和多卡训练参考<使用教程.md>下方常见错误和解决方案
+                # resume='', # last.pt path
                 project='runs/train',
                 name='exp',
                 )
