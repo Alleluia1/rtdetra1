@@ -1,63 +1,37 @@
-import os
-import time
-import warnings
-import wandb
-from ultralytics import RTDETR  # 你改版的 RT-DETR 必须继承这个结构或兼容它
-
-# ✅ 设置 WandB API key（避免每次粘贴）
-os.environ["WANDB_API_KEY"] = "f8cb8b13b090d70eb2b9b5ee36da161979b90a95"
-
+import warnings, os
+# os.environ["CUDA_VISIBLE_DEVICES"]="-1"    # 代表用cpu训练 不推荐！没意义！ 而且有些模块不能在cpu上跑
+# os.environ["CUDA_VISIBLE_DEVICES"]="0"     # 代表用第一张卡进行训练  0：第一张卡 1：第二张卡
+# 多卡训练参考<YOLOV11配置文件.md>下方常见错误和解决方案
 warnings.filterwarnings('ignore')
+from ultralytics import YOLO
 
-# ✅ 初始化 wandb 项目
-wandb.init(
-    project='rtdetr-project',
-    name=time.strftime("rtdetr_%Y%m%d_%H%M%S")
-)
+# BILIBILI UP 魔傀面具
+# 训练参数官方详解链接：https://docs.ultralytics.com/modes/train/#resuming-interrupted-trainings:~:text=a%20training%20run.-,Train%20Settings,-The%20training%20settings
+
+# 训练过程中loss出现nan，可以尝试关闭AMP，就是把下方amp=False的注释去掉。
+# 训练时候输出的AMP Check使用的YOLO11n的权重不是代表载入了预训练权重的意思，只是用于测试AMP，正常的不需要理会。
+
+# 使用项目前必看<项目视频百度云链接.txt>的第一行有一个必看的视频!!
+# 使用项目前必看<项目视频百度云链接.txt>的第一行有一个必看的视频!!
+# 使用项目前必看<项目视频百度云链接.txt>的第一行有一个必看的视频!!
+# 使用项目前必看<项目视频百度云链接.txt>的第一行有一个必看的视频!!
 
 if __name__ == '__main__':
-    # ✅ 初始化模型（路径按你实际的 yaml 配置来）
-    model = RTDETR('ultralytics/cfg/models/rt-detr/rtdetr-r18.yaml')
-
-    # ✅ 启动训练
-    results = model.train(
-        data='/root/dataset/dataset_visdrone/data.yaml',
-        imgsz=640,
-        epochs=300,
-        batch=4,
-        workers=4,
-        project='runs/train',
-        name=wandb.run.name,  # 和 wandb 名保持一致
-    )
-
-    # ✅ 每轮记录 loss，如果 results 是完整列表（每个 epoch 的指标），就记录所有 epoch
-    try:
-        if isinstance(results, list):  # 改版 RT-DETR 有可能返回多个 epoch 的结果
-            for i, epoch_metrics in enumerate(results):
-                wandb.log({
-                    'epoch': i,
-                    'loss_cls': epoch_metrics.get('loss_cls', 0),
-                    'loss_box': epoch_metrics.get('loss_bbox', 0),
-                    'loss_obj': epoch_metrics.get('loss_obj', 0),
-                    'loss_total': sum([
-                        epoch_metrics.get('loss_cls', 0),
-                        epoch_metrics.get('loss_bbox', 0),
-                        epoch_metrics.get('loss_obj', 0)
-                    ])
-                })
-        elif isinstance(results, dict):
-            # 单次记录（最后一轮）
-            wandb.log({
-                'loss_cls': results.get('loss_cls', 0),
-                'loss_box': results.get('loss_bbox', 0),
-                'loss_obj': results.get('loss_obj', 0),
-                'loss_total': sum([
-                    results.get('loss_cls', 0),
-                    results.get('loss_bbox', 0),
-                    results.get('loss_obj', 0)
-                ])
-            })
-        else:
-            print("⚠️ 无法解析训练返回结果，无法记录 loss")
-    except Exception as e:
-        print(f"⚠️ WandB 日志记录失败: {e}")
+    model = YOLO('ultralytics/cfg/models/11/yolo11n.yaml')
+    # model.load('yolo11n.pt') # loading pretrain weights
+    model.train(data='/root/autodl-tmp/neudet/data.yaml',
+                cache=False,
+                imgsz=640,
+                epochs=300,
+                batch=32,
+                close_mosaic=0, # 最后多少个epoch关闭mosaic数据增强，设置0代表全程开启mosaic训练
+                workers=4, # Windows下出现莫名其妙卡主的情况可以尝试把workers设置为0
+                # device='0,1', # 指定显卡和多卡训练参考<YOLOV11配置文件.md>下方常见错误和解决方案
+                optimizer='SGD', # using SGD
+                # patience=0, # set 0 to close earlystop.
+                # resume=True, # 断点续训,YOLO初始化时选择last.pt
+                # amp=False, # close amp | loss出现nan可以关闭amp
+                # fraction=0.2,
+                project='runs/train',
+                name='exp',
+                )
