@@ -1,32 +1,71 @@
-import warnings, os
-# os.environ["CUDA_VISIBLE_DEVICES"]="-1"    # 代表用cpu训练 不推荐！没意义！ 而且有些模块不能在cpu上跑
-# os.environ["CUDA_VISIBLE_DEVICES"]="0"     # 代表用第一张卡进行训练  0：第一张卡 1：第二张卡
-# 多卡训练参考<使用教程.md>下方常见错误和解决方案
-warnings.filterwarnings('ignore')
+import os, time, warnings
+import wandb
+import torch
 from ultralytics import RTDETR
 
-# 深度学习炼丹必备必看必须知道的小技巧！https://www.bilibili.com/video/BV1q3SZYsExc/
-# 整合多个创新点的B站视频链接:
-# 1. [YOLOV8-不会把多个改进整合到一个yaml配置文件里面？那来看看这个吧！从简到难手把手带你整合三个yaml](https://www.bilibili.com/video/BV15H4y1Y7a2/)
-# 2. [细谈目标检测中的小目标检测头和大目标检测检测头，并教懂你怎么加微小目标、极大目标检测头！](https://www.bilibili.com/video/BV1jkDWYFEwx/)
-# 3. [不会看YOLO的模型yaml配置文件？那你还怎么整合多个配置文件！](https://www.bilibili.com/video/BV1oiBRYnEEw/)
-# 4. [不会把多个创新点整合到一个yaml配置文件里面？那来看看这个吧！手把手来你整合创新点！](https://www.bilibili.com/video/BV1DUBRYGE3b/)
-# 更多问题解答请看使用说明.md下方<常见疑问>
+# 关闭不必要警告
+warnings.filterwarnings('ignore')
 
-# 现版本中保存模型会比之前的大一倍，原因是因为之前保存模型的格式是fp16，但是fp16可能会导致部分模型在训练中精度正常
-# 但是在val.py的时候精度为0，所以统一改成fp32，原则上没影响，只是存储的位数变多了。
+# ✅ 启动 wandb 实验
+wandb.init(
+    project='rtdetr-project',  # 可自定义你的 wandb 项目名
+    name=time.strftime("rtdetr-%Y%m%d-%H%M%S"),
+)
 
+# ✅ 每个 epoch 结束时记录指标
+def on_fit_epoch_end(trainer):
+    metrics = trainer.metrics
+    wandb.log({
+        'epoch': trainer.epoch,
+        'precision': metrics.get('metrics/precision(B)', 0),
+        'recall': metrics.get('metrics/recall(B)', 0),
+        'map50': metrics.get('metrics/mAP50(B)', 0),
+        'map75': metrics.get('metrics/mAP75(B)', 0),
+        'map50-95': metrics.get('metrics/mAP50-95(B)', 0),
+    })
+
+# ✅ 训练完成后记录模型统计信息
+def log_static_model_info(model):
+    params = sum(p.numel() for p in model.model.parameters()) / 1e6  # M
+
+    try:
+        flops = model.model.fuse().profile()[1] / 1e9  # G
+    except:
+        flops = 0
+
+    model_path = 'runs/train/exp/weights/best.pt'
+    size_mb = os.path.getsize(model_path) / 1e6 if os.path.exists(model_path) else 0
+
+    dummy = torch.zeros((1, 3, 640, 640)).to(model.device)
+    t0 = time.time()
+    model.predict(dummy, verbose=False)
+    t1 = time.time()
+    fps = 1.0 / (t1 - t0)
+
+    wandb.log({
+        'params_M': round(params, 2),
+        'flops_G': round(flops, 2),
+        'model_size_MB': round(size_mb, 2),
+        'fps': round(fps, 2),
+    })
+
+# ✅ 主函数入口
 if __name__ == '__main__':
     model = RTDETR('ultralytics/cfg/models/rt-detr/rtdetr-r18.yaml')
-    # model.load('') # loading pretrain weights
-    model.train(data='/root/autodl-tmp/neudet/data.yaml',
-                cache=False,
-                imgsz=640,
-                epochs=200,
-                batch=4, # batchsize 不建议乱动，一般来说4的效果都是最好的，越大的batch效果会很差(经验之谈)
-                workers=4, # Windows下出现莫名其妙卡主的情况可以尝试把workers设置为0
-                # device='0,1', # 指定显卡和多卡训练参考<使用教程.md>下方常见错误和解决方案
-                # resume='', # last.pt path
-                project='runs/train',
-                name='exp',
-                )
+
+    model.train(
+        data='/root/autodl-tmp/neudet/data.yaml',
+        cache=False,
+        imgsz=640,
+        epochs=200,
+        batch=4,
+        workers=4,
+        project='runs/train',
+        name=wandb.run.name,   # 实验名与 wandb 同步
+        visualize=True,
+        wandb=True,
+        callbacks={'on_fit_epoch_end': on_fit_epoch_end},  # 注册回调
+    )
+
+    # ✅ 训练完成后记录模型静态信息
+    log_static_model_info(model)
