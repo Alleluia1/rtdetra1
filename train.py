@@ -1,34 +1,33 @@
-import warnings, os
-os.environ['WANDB_API_KEY'] = 'f8cb8b13b090d70eb2b9b5ee36da161979b90a95'
-import time
-# os.environ["CUDA_VISIBLE_DEVICES"]="-1"    # 代表用cpu训练 不推荐！没意义！ 而且有些模块不能在cpu上跑
-# os.environ["CUDA_VISIBLE_DEVICES"]="0"     # 代表用第一张卡进行训练  0：第一张卡 1：第二张卡
-# 多卡训练参考<使用教程.md>下方常见错误和解决方案
+import warnings, os, time
+os.environ['WANDB_API_KEY'] = 'f8cb8b13b090d70eb2b9b5ee36da161979b90a95'  # ⚠️ 仅用于测试时使用环境变量，不推荐硬编码
+
+# 启用 wandb 在线模式（可选）
+os.environ["WANDB_MODE"] = "online"
+os.environ["WANDB_INIT_TIMEOUT"] = "180"
+
 warnings.filterwarnings('ignore')
 from ultralytics import RTDETR
-
-# 深度学习炼丹必备必看必须知道的小技巧！https://www.bilibili.com/video/BV1q3SZYsExc/
-# 整合多个创新点的B站视频链接:
-# 1. [YOLOV8-不会把多个改进整合到一个yaml配置文件里面？那来看看这个吧！从简到难手把手带你整合三个yaml](https://www.bilibili.com/video/BV15H4y1Y7a2/)
-# 2. [细谈目标检测中的小目标检测头和大目标检测检测头，并教懂你怎么加微小目标、极大目标检测头！](https://www.bilibili.com/video/BV1jkDWYFEwx/)
-# 3. [不会看YOLO的模型yaml配置文件？那你还怎么整合多个配置文件！](https://www.bilibili.com/video/BV1oiBRYnEEw/)
-# 4. [不会把多个创新点整合到一个yaml配置文件里面？那来看看这个吧！手把手来你整合创新点！](https://www.bilibili.com/video/BV1DUBRYGE3b/)
-# 更多问题解答请看使用说明.md下方<常见疑问>
-
-# 现版本中保存模型会比之前的大一倍，原因是因为之前保存模型的格式是fp16，但是fp16可能会导致部分模型在训练中精度正常
-# 但是在val.py的时候精度为0，所以统一改成fp32，原则上没影响，只是存储的位数变多了。
+import wandb  # ← 加上这一行导入 wandb
 
 if __name__ == '__main__':
+    run = wandb.init(project="redet_backbone", name=time.strftime("%Y-%m-%d_%H-%M-%S"))  # ← 初始化 wandb 项目
     model = RTDETR('ultralytics/cfg/models/rt-detr/rtdetr-r18.yaml')
-    # model.load('') # loading pretrain weights
-    model.train(data='/root/autodl-tmp/neudet/data.yaml',
-                cache=False,
-                imgsz=640,
-                epochs=200,
-                batch=4, # batchsize 不建议乱动，一般来说4的效果都是最好的，越大的batch效果会很差(经验之谈)
-                workers=4, # Windows下出现莫名其妙卡主的情况可以尝试把workers设置为0
-                # device='0,1', # 指定显卡和多卡训练参考<使用教程.md>下方常见错误和解决方案
-                # resume='', # last.pt path
-                project='rtdetra1',
-                name = time.strftime("%Y-%m-%d_%H-%M-%S"),
-                )
+
+    # 启动训练
+    model.train(
+        data='E:/2345Downloads/Alleluia/redetr/redet_backbone/dataset/data.yaml',
+        cache=False,
+        imgsz=640,
+        epochs=200,
+        batch=4,
+        workers=4,
+        project='rtdetr_backbone',
+        name=run.name  # 与 wandb run 同名，方便追踪
+    )
+
+    # 上传模型权重（默认保存在 runs/train/<exp>/weights 下）
+    weight_dir = f'runs/rtdetr_backbone/{run.name}/weights'
+    wandb.save(f'{weight_dir}/best.pt')
+    wandb.save(f'{weight_dir}/last.pt')
+
+    run.finish()  # 🧹 清理和关闭 wandb 运行
